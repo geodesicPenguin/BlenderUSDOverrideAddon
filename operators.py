@@ -2,14 +2,14 @@ import bpy
 import bpy.types as bt
 
 from . import properties as prop
-from . import usda_primref_editor as primref
+from . import usda_primref_editor as subedit
 
 
-class USD_OT_ScanPrimPrependedRefs(bt.Operator):
-    """Scan a USDA file for prims that have prepended references."""
+class USD_OT_ScanSublayers(bt.Operator):
+    """Scan a USDA file's root layer for sublayers."""
 
-    bl_idname = "usd_primrefs.scan"
-    bl_label = "Scan USDA Prims"
+    bl_idname = "usd_sublayers.scan"
+    bl_label = "Scan USDA Sublayers"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -18,7 +18,7 @@ class USD_OT_ScanPrimPrependedRefs(bt.Operator):
 
     def execute(self, context):
         scene = context.scene
-        settings: prop.USDPrimRefSettings = scene.usd_primref_settings
+        settings: prop.USDSublayerSettings = scene.usd_sublayer_settings
 
         usda_path = settings.usda_path
         if not usda_path:
@@ -26,50 +26,34 @@ class USD_OT_ScanPrimPrependedRefs(bt.Operator):
             return {"CANCELLED"}
 
         try:
-            prim_paths = primref.get_prim_paths_with_prepended_refs(usda_path)
-        except Exception as exc:  
-            self.report({"ERROR"}, f"Failed to read USDA file: {exc}")
+            editor = subedit.UsdaSublayerEditor(usda_path)
+            sublayer_paths = editor.load_sublayers()
+        except Exception as exc:
+            self.report({"ERROR"}, f"Failed to read USDA sublayers: {exc}")
             return {"CANCELLED"}
 
-        settings.prims.clear()
+        settings.sublayers.clear()
 
-        for prim_path in prim_paths:
-            prim_item: prop.USDPrimItem = settings.prims.add()
-            prim_item.prim_path = prim_path
+        for path in sublayer_paths:
+            item: prop.USDSublayerItem = settings.sublayers.add()
+            item.filepath = path
 
-            try:
-                editor = primref.UsdPrimRefEditor(usda_path, prim_path)
-                ref_paths = editor.load_primrefs()
-            except Exception as exc:  
-                self.report(
-                    {"WARNING"},
-                    f"Failed to read prepended refs for '{prim_path}': {exc}",
-                )
-                continue
-
-            for ref_path in ref_paths:
-                ref_item: prop.USDRefItem = prim_item.refs.add()
-                ref_item.filepath = ref_path
-
-        if not settings.prims:
-            self.report(
-                {"INFO"},
-                "No prims with prepended references were found in this USDA file.",
-            )
+        if not settings.sublayers:
+            self.report({"INFO"}, "No sublayers found in this USDA file.")
         else:
             self.report(
                 {"INFO"},
-                f"Found {len(settings.prims)} prim(s) with prepended references.",
+                f"Found {len(settings.sublayers)} sublayer(s) in this USDA file.",
             )
 
         return {"FINISHED"}
 
 
-class USD_OT_MovePrimRefItem(bt.Operator):
-    """Move the active prepended reference up or down within a prim's list."""
+class USD_OT_MoveSublayerItem(bt.Operator):
+    """Move the active sublayer up or down within the root layer's subLayerPaths."""
 
-    bl_idname = "usd_primrefs.move_ref_item"
-    bl_label = "Move Prim Reference"
+    bl_idname = "usd_sublayers.move_item"
+    bl_label = "Move Sublayer"
     bl_options = {"REGISTER", "UNDO"}
 
     direction: bpy.props.EnumProperty(
@@ -80,34 +64,18 @@ class USD_OT_MovePrimRefItem(bt.Operator):
         ),
     )
 
-    prim_path: bpy.props.StringProperty(
-        name="Prim Path",
-        description="USD prim path this reference list belongs to",
-    )
-
     @classmethod
     def poll(cls, context) -> bool:
         return context.scene is not None
 
     def execute(self, context):
         scene = context.scene
-        settings: prop.USDPrimRefSettings = scene.usd_primref_settings
+        settings: prop.USDSublayerSettings = scene.usd_sublayer_settings
 
-        # Find the matching prim item by path
-        prim_item = None
-        for item in settings.prims:
-            if item.prim_path == self.prim_path:
-                prim_item = item
-                break
+        sublayers = settings.sublayers
+        idx = settings.active_sublayer_index
 
-        if prim_item is None:
-            self.report({"ERROR"}, f"Prim '{self.prim_path}' not found in settings.")
-            return {"CANCELLED"}
-
-        refs = prim_item.refs
-        idx = prim_item.active_ref_index
-
-        if not refs or idx < 0 or idx >= len(refs):
+        if not sublayers or idx < 0 or idx >= len(sublayers):
             return {"CANCELLED"}
 
         if self.direction == "UP":
@@ -115,26 +83,21 @@ class USD_OT_MovePrimRefItem(bt.Operator):
         else:
             new_index = idx + 1
 
-        if new_index < 0 or new_index >= len(refs):
+        if new_index < 0 or new_index >= len(sublayers):
             return {"CANCELLED"}
 
-        refs.move(idx, new_index)
-        prim_item.active_ref_index = new_index
+        sublayers.move(idx, new_index)
+        settings.active_sublayer_index = new_index
 
         return {"FINISHED"}
 
 
-class USD_OT_SavePrimRefOrder(bt.Operator):
-    """Save the current order of prepended references for a prim back to the USDA file."""
+class USD_OT_SaveSublayers(bt.Operator):
+    """Save the current list and order of sublayers back to the USDA file."""
 
-    bl_idname = "usd_primrefs.save_prim_order"
-    bl_label = "Save Prim Reference Order"
+    bl_idname = "usd_sublayers.save"
+    bl_label = "Save Sublayers"
     bl_options = {"REGISTER", "UNDO"}
-
-    prim_path: bpy.props.StringProperty(
-        name="Prim Path",
-        description="USD prim path whose references should be saved",
-    )
 
     @classmethod
     def poll(cls, context) -> bool:
@@ -142,48 +105,37 @@ class USD_OT_SavePrimRefOrder(bt.Operator):
 
     def execute(self, context):
         scene = context.scene
-        settings: prop.USDPrimRefSettings = scene.usd_primref_settings
+        settings: prop.USDSublayerSettings = scene.usd_sublayer_settings
 
         usda_path = settings.usda_path
         if not usda_path:
             self.report({"ERROR"}, "Please choose a USDA file first.")
             return {"CANCELLED"}
 
-        # Find the matching prim item by path
-        prim_item = None
-        for item in settings.prims:
-            if item.prim_path == self.prim_path:
-                prim_item = item
-                break
-
-        if prim_item is None:
-            self.report({"ERROR"}, f"Prim '{self.prim_path}' not found in settings.")
-            return {"CANCELLED"}
-
-        new_order = [ref.filepath for ref in prim_item.refs]
+        new_order = [item.filepath for item in settings.sublayers]
 
         try:
-            editor = primref.UsdPrimRefEditor(usda_path, self.prim_path)
-            editor.save_primrefs(new_order)
+            editor = subedit.UsdaSublayerEditor(usda_path)
+            editor.save_sublayers(new_order)
         except Exception as exc:
             self.report(
                 {"ERROR"},
-                f"Failed to save prepended refs for '{self.prim_path}': {exc}",
+                f"Failed to save sublayers for '{usda_path}': {exc}",
             )
             return {"CANCELLED"}
 
         self.report(
             {"INFO"},
-            f"Saved {len(new_order)} prepended reference(s) for '{self.prim_path}'.",
+            f"Saved {len(new_order)} sublayer(s) for '{usda_path}'.",
         )
 
         return {"FINISHED"}
 
 
 CLASSES = (
-    USD_OT_ScanPrimPrependedRefs,
-    USD_OT_MovePrimRefItem,
-    USD_OT_SavePrimRefOrder,
+    USD_OT_ScanSublayers,
+    USD_OT_MoveSublayerItem,
+    USD_OT_SaveSublayers,
 )
 
 

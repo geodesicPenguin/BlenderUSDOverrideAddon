@@ -3,46 +3,33 @@ import bpy.types as bt
 import bpy.props as bp
 
 
-class USDRefItem(bt.PropertyGroup):
+class USDSublayerItem(bt.PropertyGroup):
     filepath: bp.StringProperty(
-        name="Filepath",
-        description="Filepath from a prepended USD reference",
+        name="Sublayer Filepath",
+        description="Filepath of a sublayer in the USDA file's root layer",
     )
 
 
-class USDPrimItem(bt.PropertyGroup):
-    prim_path: bp.StringProperty(
-        name="Prim Path",
-        description="USD prim path that has prepended references",
+class USDSublayerSettings(bt.PropertyGroup):
+    usda_path: bp.StringProperty(
+        name="USDA File",
+        description="Path to a USDA file whose root-layer sublayers should be edited",
+        subtype="FILE_PATH",
     )
-    refs: bp.CollectionProperty(
-        name="Prepended References",
-        description="Filepaths found in this prim's prepended references",
-        type=USDRefItem,
+    sublayers: bp.CollectionProperty(
+        name="Sublayers",
+        description="Sublayer filepaths from the USDA file's root layer",
+        type=USDSublayerItem,
     )
-    active_ref_index: bp.IntProperty(
-        name="Active Reference Index",
+    active_sublayer_index: bp.IntProperty(
+        name="Active Sublayer Index",
         default=0,
     )
 
 
-class USDPrimRefSettings(bt.PropertyGroup):
-    usda_path: bp.StringProperty(
-        name="USDA File",
-        description="Path to a USDA file to inspect for prim prepended references",
-        subtype="FILE_PATH",
-    )
-    prims: bp.CollectionProperty(
-        name="Prims With Prepended Refs",
-        description="Prims in the USDA file that have prepended references",
-        type=USDPrimItem,
-    )
-
-
 CLASSES = (
-    USDRefItem,
-    USDPrimItem,
-    USDPrimRefSettings,
+    USDSublayerItem,
+    USDSublayerSettings,
 )
 
 
@@ -50,11 +37,13 @@ def register() -> None:
     for cls in CLASSES:
         bpy.utils.register_class(cls)
 
-    bpy.types.Scene.usd_primref_settings = bp.PointerProperty(type=USDPrimRefSettings)
+    bpy.types.Scene.usd_sublayer_settings = bp.PointerProperty(
+        type=USDSublayerSettings
+    )
 
 
 def unregister() -> None:
-    del bpy.types.Scene.usd_primref_settings
+    del bpy.types.Scene.usd_sublayer_settings
 
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

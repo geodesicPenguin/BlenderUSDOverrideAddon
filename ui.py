@@ -4,10 +4,10 @@ import bpy.types as bt
 from . import properties as prop
 
 
-class USD_UL_PrimRefList(bt.UIList):
-    """List of filepaths for a single prim's prepended references."""
+class USD_UL_SublayerList(bt.UIList):
+    """List of root-layer sublayer filepaths for a USDA file."""
 
-    bl_idname = "USD_UL_prim_ref_list"
+    bl_idname = "USD_UL_sublayer_list"
 
     def draw_item(
         self,
@@ -20,22 +20,22 @@ class USD_UL_PrimRefList(bt.UIList):
         active_propname,
         index,
     ):
-        ref: prop.USDRefItem = item
+        sub: prop.USDSublayerItem = item
         if self.layout_type in {"DEFAULT", "COMPACT"}:
-            layout.label(text=ref.filepath or "<empty>")
+            layout.label(text=sub.filepath or "<empty>")
         elif self.layout_type == "GRID":
             layout.alignment = "CENTER"
             layout.label(text=str(index))
 
 
-class USD_PT_PrimPrependedRefs(bt.Panel):
-    """Panel in the 3D Viewport side bar to show USDA prim prepended refs."""
+class USD_PT_UsdaSublayers(bt.Panel):
+    """Panel in the 3D Viewport sidebar to show and edit USDA root-layer sublayers."""
 
-    bl_label = "USD Prim Prepended Refs"
-    bl_idname = "USD_PT_prim_prepended_refs"
+    bl_label = "USD Sublayers"
+    bl_idname = "USD_PT_usd_sublayers"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "USD Refs"
+    bl_category = "USD Sublayers"
 
     @classmethod
     def poll(cls, context):
@@ -44,65 +44,57 @@ class USD_PT_PrimPrependedRefs(bt.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        settings: prop.USDPrimRefSettings = scene.usd_primref_settings
+        settings: prop.USDSublayerSettings = scene.usd_sublayer_settings
 
         layout.prop(settings, "usda_path")
 
         row = layout.row(align=True)
-        row.operator("usd_primrefs.scan", icon="FILE_REFRESH")
+        row.operator("usd_sublayers.scan", icon="FILE_REFRESH")
 
-        if not settings.prims:
+        if not settings.sublayers:
             layout.separator()
-            layout.label(text="No prims with prepended refs found.")
+            layout.label(text="No sublayers found.")
             return
 
         layout.separator()
 
-        for prim in settings.prims:
-            box = layout.box()
-            header_row = box.row()
-            header_row.label(text=prim.prim_path)
+        layout.template_list(
+            "USD_UL_sublayer_list",
+            "sublayers",
+            settings,
+            "sublayers",
+            settings,
+            "active_sublayer_index",
+            rows=6,
+        )
 
-            box.template_list(
-                "USD_UL_prim_ref_list",
-                prim.prim_path,
-                prim,
-                "refs",
-                prim,
-                "active_ref_index",
-                rows=3,
-            )
+        controls_row = layout.row(align=True)
+        move_up = controls_row.operator(
+            "usd_sublayers.move_item",
+            text="",
+            icon="TRIA_UP",
+        )
+        move_up.direction = "UP"
 
-            controls_row = box.row(align=True)
-            move_up = controls_row.operator(
-                "usd_primrefs.move_ref_item",
-                text="",
-                icon="TRIA_UP",
-            )
-            move_up.direction = "UP"
-            move_up.prim_path = prim.prim_path
+        move_down = controls_row.operator(
+            "usd_sublayers.move_item",
+            text="",
+            icon="TRIA_DOWN",
+        )
+        move_down.direction = "DOWN"
 
-            move_down = controls_row.operator(
-                "usd_primrefs.move_ref_item",
-                text="",
-                icon="TRIA_DOWN",
-            )
-            move_down.direction = "DOWN"
-            move_down.prim_path = prim.prim_path
+        controls_row.separator()
 
-            controls_row.separator()
-
-            save_op = controls_row.operator(
-                "usd_primrefs.save_prim_order",
-                text="Save Order",
-                icon="FILE_TICK",
-            )
-            save_op.prim_path = prim.prim_path
+        controls_row.operator(
+            "usd_sublayers.save",
+            text="Save Sublayer Order",
+            icon="FILE_TICK",
+        )
 
 
 CLASSES = (
-    USD_UL_PrimRefList,
-    USD_PT_PrimPrependedRefs,
+    USD_UL_SublayerList,
+    USD_PT_UsdaSublayers,
 )
 
 
