@@ -11,7 +11,6 @@ class UsdPrimRefEditor:
     def __init__(self, usda_path: str, prim_path: str):
         """Open the given USDA file and target the prim at prim_path (e.g. '/robotCharComp')."""
         
-        
         self.usda_path: str = str(usda_path)
         self.prim_path: str = prim_path if prim_path.startswith("/") else f"/{prim_path}"
         self._layer: Optional[Sdf.Layer] = None
@@ -19,7 +18,6 @@ class UsdPrimRefEditor:
 
     def _get_layer(self) -> Sdf.Layer:
         """Return the Sdf layer for the USDA file, reloading from disk so data is current."""
-        
         
         if self._layer is None:
             layer = Sdf.Layer.FindOrOpen(self.usda_path)
@@ -34,7 +32,6 @@ class UsdPrimRefEditor:
 
     def _get_prim_spec(self) -> Sdf.PrimSpec:
         """Return the Sdf.PrimSpec for this editor's prim path."""
-        
         
         layer = self._get_layer()
         prim_spec = layer.GetPrimAtPath(Sdf.Path(self.prim_path))
@@ -61,7 +58,6 @@ class UsdPrimRefEditor:
 
     def save_primrefs(self, new_order: List[str]) -> None:
         """Set this prim's prepended reference order to new_order (list of asset paths) and save the layer."""
-        
         
         prim_spec = self._get_prim_spec()
         ref_list_op = prim_spec.referenceList
