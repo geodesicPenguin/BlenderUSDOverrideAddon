@@ -73,6 +73,32 @@ class USD_PT_PrimPrependedRefs(bt.Panel):
                 rows=3,
             )
 
+            controls_row = box.row(align=True)
+            move_up = controls_row.operator(
+                "usd_primrefs.move_ref_item",
+                text="",
+                icon="TRIA_UP",
+            )
+            move_up.direction = "UP"
+            move_up.prim_path = prim.prim_path
+
+            move_down = controls_row.operator(
+                "usd_primrefs.move_ref_item",
+                text="",
+                icon="TRIA_DOWN",
+            )
+            move_down.direction = "DOWN"
+            move_down.prim_path = prim.prim_path
+
+            controls_row.separator()
+
+            save_op = controls_row.operator(
+                "usd_primrefs.save_prim_order",
+                text="Save Order",
+                icon="FILE_TICK",
+            )
+            save_op.prim_path = prim.prim_path
+
 
 CLASSES = (
     USD_UL_PrimRefList,

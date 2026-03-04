@@ -70,15 +70,33 @@ class UsdPrimRefEditor:
         if not original_refs and new_order:
             raise RuntimeError("No prepended references found on prim.")
 
-        by_asset: dict[str, Sdf.Reference] = {ref.assetPath: ref for ref in original_refs}
+        # Build a reordered list by walking the original references and matching
+        # each path in new_order in sequence. This preserves duplicates and the
+        # original Sdf.Reference objects.
+        used_indices: set[int] = set()
+        reordered_refs: list[Sdf.Reference] = []
 
-        try:
-            reordered_refs = [by_asset[path] for path in new_order]
-        except KeyError as exc:
-            missing = str(exc)
-            raise RuntimeError(f"Unknown reference path in new_order: {missing}") from None
+        for path in new_order:
+            found_index: int | None = None
 
-        ref_list_op.prependedItems = reordered_refs
+            for idx, ref in enumerate(original_refs):
+                if idx in used_indices:
+                    continue
+                if ref.assetPath == path:
+                    found_index = idx
+                    reordered_refs.append(ref)
+                    used_indices.add(idx)
+                    break
+
+            if found_index is None:
+                raise RuntimeError(f"Unknown reference path in new_order: {path}")
+
+        # Assign a new ReferenceListOp back to the prim spec so the change is
+        # actually written to the layer. Construct the op first, then set
+        # prependedItems to avoid signature mismatches in some USD builds.
+        new_list_op = Sdf.ReferenceListOp()
+        new_list_op.prependedItems = reordered_refs
+        prim_spec.referenceList = new_list_op
 
         layer = self._get_layer()
         layer.Save()

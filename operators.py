@@ -65,8 +65,125 @@ class USD_OT_ScanPrimPrependedRefs(bt.Operator):
         return {"FINISHED"}
 
 
+class USD_OT_MovePrimRefItem(bt.Operator):
+    """Move the active prepended reference up or down within a prim's list."""
+
+    bl_idname = "usd_primrefs.move_ref_item"
+    bl_label = "Move Prim Reference"
+    bl_options = {"REGISTER", "UNDO"}
+
+    direction: bpy.props.EnumProperty(
+        name="Direction",
+        items=(
+            ("UP", "Up", "Move the item up"),
+            ("DOWN", "Down", "Move the item down"),
+        ),
+    )
+
+    prim_path: bpy.props.StringProperty(
+        name="Prim Path",
+        description="USD prim path this reference list belongs to",
+    )
+
+    @classmethod
+    def poll(cls, context) -> bool:
+        return context.scene is not None
+
+    def execute(self, context):
+        scene = context.scene
+        settings: prop.USDPrimRefSettings = scene.usd_primref_settings
+
+        # Find the matching prim item by path
+        prim_item = None
+        for item in settings.prims:
+            if item.prim_path == self.prim_path:
+                prim_item = item
+                break
+
+        if prim_item is None:
+            self.report({"ERROR"}, f"Prim '{self.prim_path}' not found in settings.")
+            return {"CANCELLED"}
+
+        refs = prim_item.refs
+        idx = prim_item.active_ref_index
+
+        if not refs or idx < 0 or idx >= len(refs):
+            return {"CANCELLED"}
+
+        if self.direction == "UP":
+            new_index = idx - 1
+        else:
+            new_index = idx + 1
+
+        if new_index < 0 or new_index >= len(refs):
+            return {"CANCELLED"}
+
+        refs.move(idx, new_index)
+        prim_item.active_ref_index = new_index
+
+        return {"FINISHED"}
+
+
+class USD_OT_SavePrimRefOrder(bt.Operator):
+    """Save the current order of prepended references for a prim back to the USDA file."""
+
+    bl_idname = "usd_primrefs.save_prim_order"
+    bl_label = "Save Prim Reference Order"
+    bl_options = {"REGISTER", "UNDO"}
+
+    prim_path: bpy.props.StringProperty(
+        name="Prim Path",
+        description="USD prim path whose references should be saved",
+    )
+
+    @classmethod
+    def poll(cls, context) -> bool:
+        return context.scene is not None
+
+    def execute(self, context):
+        scene = context.scene
+        settings: prop.USDPrimRefSettings = scene.usd_primref_settings
+
+        usda_path = settings.usda_path
+        if not usda_path:
+            self.report({"ERROR"}, "Please choose a USDA file first.")
+            return {"CANCELLED"}
+
+        # Find the matching prim item by path
+        prim_item = None
+        for item in settings.prims:
+            if item.prim_path == self.prim_path:
+                prim_item = item
+                break
+
+        if prim_item is None:
+            self.report({"ERROR"}, f"Prim '{self.prim_path}' not found in settings.")
+            return {"CANCELLED"}
+
+        new_order = [ref.filepath for ref in prim_item.refs]
+
+        try:
+            editor = primref.UsdPrimRefEditor(usda_path, self.prim_path)
+            editor.save_primrefs(new_order)
+        except Exception as exc:
+            self.report(
+                {"ERROR"},
+                f"Failed to save prepended refs for '{self.prim_path}': {exc}",
+            )
+            return {"CANCELLED"}
+
+        self.report(
+            {"INFO"},
+            f"Saved {len(new_order)} prepended reference(s) for '{self.prim_path}'.",
+        )
+
+        return {"FINISHED"}
+
+
 CLASSES = (
     USD_OT_ScanPrimPrependedRefs,
+    USD_OT_MovePrimRefItem,
+    USD_OT_SavePrimRefOrder,
 )
 
 
